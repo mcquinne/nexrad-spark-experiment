@@ -1,0 +1,5 @@
+rootProject.name = 'nexrad-spark-experiment'
+
+include 'mock-s3-init'
+include 'nexrad-processor'
+include 'stack'

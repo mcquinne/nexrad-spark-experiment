@@ -1,0 +1,49 @@
+apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: 'com.bmuschko.docker-remote-api'
+apply plugin: 'scala'
+
+import com.bmuschko.gradle.docker.tasks.image.Dockerfile
+import com.bmuschko.gradle.docker.tasks.image.DockerBuildImage
+
+dependencies {
+  compile 'org.scala-lang:scala-library:2.11.8'
+  compile 'com.amazonaws:aws-java-sdk-s3:1.11.68'
+}
+
+jar {
+  manifest {
+    attributes 'Main-Class': 'mcquinne.nexrad.SetupBucket'
+  }
+}
+
+def dockerDir = new File(buildDir, 'docker')
+
+task syncDataToDockerDir(type: Sync) {
+  from 'data'
+  into "$dockerDir/data"
+}
+
+task copyJarToDockerDir(type: Copy) {
+  dependsOn shadowJar
+
+  from { shadowJar.outputs.files.singleFile }
+  into dockerDir
+}
+
+task createDockerfile(type: Dockerfile) {
+  destFile = new File(dockerDir, 'Dockerfile')
+
+  from 'java:8'
+  maintainer 'Evan McQuinn "mcquinne@gmail.com"'
+  copyFile '/data', '/data'
+  copyFile shadowJar.outputs.files.singleFile.name, '/opt/'
+  entryPoint 'java', '-jar', "/opt/${shadowJar.outputs.files.singleFile.name}"
+}
+
+task buildImage(type: DockerBuildImage) {
+  dependsOn createDockerfile, syncDataToDockerDir, copyJarToDockerDir
+  inputDir = dockerDir
+  tag = project.name
+}
+
+build.dependsOn buildImage

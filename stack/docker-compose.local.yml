@@ -1,0 +1,100 @@
+version: "3"
+
+services:
+  master:
+    image: gettyimages/spark:2.0.2-hadoop-2.7
+    command: spark-class org.apache.spark.deploy.master.Master
+#    networks:
+#      main:
+#        aliases:
+#          - master
+#      nexrad_submission:
+#        aliases:
+#          - master
+    ports:
+      - 4040:4040
+      - 6066:6066
+      - 7077:7077
+      - 8080:8080
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+
+  worker:
+    image: gettyimages/spark:2.0.2-hadoop-2.7
+    command: spark-class org.apache.spark.deploy.worker.Worker spark://master:7077
+    depends_on:
+      - master
+#    networks:
+#      - main
+    ports:
+      - 8081:8081
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == worker]
+
+  s3:
+    image: lphoward/fake-s3
+    ports:
+      - 4569
+    networks:
+      default:
+        aliases:
+          - s3.mcquinne.com
+          - noaa-nexrad-level2.s3.mcquinne.com
+    deploy:
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+
+  s3_initializer:
+    image: mock-s3-init
+    depends_on:
+      - s3
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+      placement:
+        constraints: [node.role == manager]
+
+  processor:
+    image: nexrad-processor
+    depends_on:
+      - s3_initializer
+      - master
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+      placement:
+        constraints: [node.role == manager]
+
+networks:
+  default:
+#  main:
+#  nexrad_submission:
+#    external: true
+
+
+
+#  fakes3:
+#    image: lphoward/fake-s3
+#    restart: always
+#    hostname: s3
+#    expose:
+#      - "4569"
+#  fakes3ssl:
+#    image: danieldent/nginx-ssl-proxy
+#    restart: always
+#    hostname: noaa-nexrad-level2.s3.amazonaws.com
+#    environment:
+#      UPSTREAM: s3:4569
+#      SERVERNAME: noaa-nexrad-level2.s3.amazonaws.com
+#    ports:
+#      - "80:80"
+#      - "443:443"
+#    volumes:
+#      - "/certs"

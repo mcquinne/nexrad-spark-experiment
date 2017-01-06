@@ -1,0 +1,24 @@
+def stackName = 'nexrad'
+
+//def mode = project.hasProperty('aws') ? 'aws' : 'local'
+def mode = 'aws' // TODO - figure out the local s3 mock for better testing
+def composeFile = "docker-compose.${mode}.yml"
+
+task remove(type: Exec) {
+  commandLine 'docker', 'stack', 'rm', stackName
+  ignoreExitValue true
+}
+
+task deploy(type: Exec) {
+  dependsOn ':nexrad-processor:build', ':mock-s3-init:build'
+  mustRunAfter remove
+
+  commandLine 'docker', 'stack', 'deploy',
+      '-c', composeFile,
+      stackName
+}
+
+task redeploy {
+  dependsOn remove, deploy
+}
+
